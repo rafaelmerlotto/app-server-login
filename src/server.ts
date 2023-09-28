@@ -4,9 +4,11 @@ import { User } from '@prisma/client'
 import { compareSync, hashSync } from 'bcrypt'
 import jwt from 'jsonwebtoken';
 import { getJwtKeys } from './key';
+import cors from 'cors' 
 
 const server = express()
 server.use(express.json())
+server.use(cors())
 
 
 async function verifyUser(email: string, password: string): Promise<User | null> {
@@ -24,12 +26,17 @@ async function verifyUser(email: string, password: string): Promise<User | null>
     return user
 }
 
+function getExpTime(min:number){
+    const now = Math.trunc(new Date().getTime() / 1000);
+    return now + min * 10;
+}
 
-async function generateJwt(user: User): Promise<string> {
+async function generateJwt(user: User | null): Promise<string> {
     const payload = {
         aud: 'access',
-        id: user.id,
-        email: user.email
+        exp: getExpTime(2 *60),
+        id: user!.id,
+        email: user!.email
     }
     const { privateKey } = await getJwtKeys();
     return jwt.sign(payload, privateKey, { algorithm: 'RS256' })
@@ -41,12 +48,13 @@ server.post('/login', async (req, res) => {
     if (!user) {
         res.status(403).send({ msg: 'Invalid authentication' })
     }
-    const token = await generateJwt(user!);
+    const token = await generateJwt(user);
     return res.status(201).send({
+        msg: `Hello ${user?.name}`,
         accessToken: token
+        
     })
 })
-
 
 server.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
@@ -60,11 +68,13 @@ server.post('/register', async (req, res) => {
                 password: passwordHash
             }
         })
+         console.log(user)
         return res.status(201).send({
             id: user.id,
             email: user.email,
             name: user.name
         })
+       
     } catch {
         return res.status(401).send({ msg: 'cannot create user' })
     }
@@ -81,7 +91,9 @@ server.get('/', async (req, res) => {
 })
 
 
-const PORT = 3001
+const PORT = 4000
 server.listen(PORT, () => {
     console.log(`server is running on 🚀 http://localhost:${PORT}`)
 })
+
+export {server}
